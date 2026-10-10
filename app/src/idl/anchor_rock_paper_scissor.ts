@@ -5,7 +5,7 @@
  * IDL can be found at `target/idl/anchor_rock_paper_scissor.json`.
  */
 export type AnchorRockPaperScissor = {
-  address: "GXDyWeZqR9RXC93ZvN14sFsnmQDeugUsuuQNXaytBb8R";
+  address: "FMKTJ4ASZfDWoRXg7bdZC24Y3es3tHFSqHH28PbCSeWi";
   metadata: {
     name: "anchorRockPaperScissor";
     version: "0.1.0";
@@ -238,38 +238,38 @@ export type AnchorRockPaperScissor = {
             program: {
               kind: "const";
               value: [
-                230,
-                157,
-                101,
-                246,
-                81,
-                108,
-                18,
-                23,
-                20,
-                141,
+                213,
+                56,
+                25,
+                49,
+                182,
+                94,
+                164,
+                241,
+                106,
+                54,
+                250,
                 126,
-                159,
-                139,
-                245,
-                167,
-                186,
-                124,
+                65,
+                210,
+                233,
+                192,
                 174,
-                12,
-                79,
-                74,
-                114,
-                187,
-                76,
-                1,
-                251,
-                181,
-                167,
-                131,
-                247,
-                255,
-                118,
+                213,
+                91,
+                126,
+                198,
+                193,
+                48,
+                254,
+                145,
+                132,
+                7,
+                203,
+                75,
+                9,
+                173,
+                199,
               ];
             };
           };
@@ -348,7 +348,7 @@ export type AnchorRockPaperScissor = {
         },
         {
           name: "ownerProgram";
-          address: "GXDyWeZqR9RXC93ZvN14sFsnmQDeugUsuuQNXaytBb8R";
+          address: "FMKTJ4ASZfDWoRXg7bdZC24Y3es3tHFSqHH28PbCSeWi";
         },
         {
           name: "delegationProgram";
@@ -921,6 +921,106 @@ export type AnchorRockPaperScissor = {
       args: [];
     },
     {
+      name: "spy";
+      discriminator: [70, 213, 113, 91, 2, 233, 55, 100];
+      accounts: [
+        {
+          name: "game";
+          pda: {
+            seeds: [
+              {
+                kind: "const";
+                value: [103, 97, 109, 101];
+              },
+              {
+                kind: "account";
+                path: "game.game_id";
+                account: "game";
+              },
+            ];
+          };
+        },
+        {
+          name: "myChoice";
+          writable: true;
+          pda: {
+            seeds: [
+              {
+                kind: "const";
+                value: [
+                  112,
+                  108,
+                  97,
+                  121,
+                  101,
+                  114,
+                  95,
+                  99,
+                  104,
+                  111,
+                  105,
+                  99,
+                  101,
+                ];
+              },
+              {
+                kind: "account";
+                path: "game.game_id";
+                account: "game";
+              },
+              {
+                kind: "account";
+                path: "player";
+              },
+            ];
+          };
+        },
+        {
+          name: "theirChoice";
+          pda: {
+            seeds: [
+              {
+                kind: "const";
+                value: [
+                  112,
+                  108,
+                  97,
+                  121,
+                  101,
+                  114,
+                  95,
+                  99,
+                  104,
+                  111,
+                  105,
+                  99,
+                  101,
+                ];
+              },
+              {
+                kind: "account";
+                path: "game.game_id";
+                account: "game";
+              },
+              {
+                kind: "account";
+                path: "opponent";
+              },
+            ];
+          };
+        },
+        {
+          name: "opponent";
+        },
+        {
+          name: "player";
+          writable: true;
+          signer: true;
+        },
+      ];
+      args: [];
+    },
+    {
       name: "undelegateAll";
       discriminator: [85, 123, 97, 145, 66, 22, 252, 69];
       accounts: [
@@ -1117,6 +1217,21 @@ export type AnchorRockPaperScissor = {
       name: "badTarget";
       msg: "That territory does not exist.";
     },
+    {
+      code: 6015;
+      name: "opponentNotLocked";
+      msg: "Your opponent has not locked in a move yet.";
+    },
+    {
+      code: 6016;
+      name: "noSpyCharges";
+      msg: "You have no espionage left.";
+    },
+    {
+      code: 6017;
+      name: "roundAlreadyRevealed";
+      msg: "This round has already been revealed.";
+    },
   ];
   types: [
     {
@@ -1251,6 +1366,26 @@ export type AnchorRockPaperScissor = {
               array: ["u8", 12];
             };
           },
+          {
+            name: "eventKind";
+            type: "u8";
+          },
+          {
+            name: "eventTarget";
+            type: "u8";
+          },
+          {
+            name: "treasure";
+            type: {
+              array: ["u8", 12];
+            };
+          },
+          {
+            name: "banner";
+            type: {
+              array: ["u8", 2];
+            };
+          },
         ];
       };
     },
@@ -1308,6 +1443,20 @@ export type AnchorRockPaperScissor = {
           },
           {
             name: "choice";
+            type: {
+              option: {
+                defined: {
+                  name: "move";
+                };
+              };
+            };
+          },
+          {
+            name: "spyCharges";
+            type: "u8";
+          },
+          {
+            name: "spied";
             type: {
               option: {
                 defined: {

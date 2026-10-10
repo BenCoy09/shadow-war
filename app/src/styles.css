@@ -989,3 +989,8 @@ a.log-sig:hover {
 .sw-report { width: 100%; max-width: 560px; margin: 12px auto 0; padding: 10px 14px; border-radius: 12px; background: rgba(255, 255, 255, 0.08); font-size: 0.9rem; }
 .sw-report ul { margin: 6px 0 0; padding-left: 18px; }
 .sw-report li { margin: 3px 0; }
+
+.sw-event { width: 100%; max-width: 560px; margin: 0 auto 10px; padding: 10px 14px; border-radius: 12px; text-align: center; font-weight: 700; background: rgba(255, 170, 0, 0.18); border: 1px solid rgba(255, 190, 60, 0.5); }
+.sw-spy { width: 100%; max-width: 560px; margin: 12px auto 0; text-align: center; }
+.sw-spy p { margin: 8px 0 0; }
+.sw-spy-note { opacity: 0.8; font-size: 0.85rem; }

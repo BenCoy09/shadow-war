@@ -75,8 +75,23 @@ export const initialBoard = () => {
     owner[t] = 0;
     owner[t + 3] = 1;
   }
-  return { owner, shield: Array(NUM_TERRITORIES).fill(0) as number[] };
+  return {
+    owner,
+    shield: Array(NUM_TERRITORIES).fill(0) as number[],
+    treasure: Array(NUM_TERRITORIES).fill(0) as number[],
+    banner: [0, 0],
+    event: { kind: 0, target: NEUTRAL },
+  };
 };
+
+/** Everything the UI needs to draw the map, taken from an on-chain game. */
+export const boardFrom = (g: GameAccount) => ({
+  owner: g.owner,
+  shield: g.shield,
+  treasure: g.treasure,
+  banner: g.banner,
+  event: { kind: g.eventKind, target: g.eventTarget },
+});
 
 export interface GameAccount {
   gameId: BN;
@@ -93,6 +108,10 @@ export interface GameAccount {
   round: number;
   owner: number[]; // 0 = player 1, 1 = player 2, 255 = neutral
   shield: number[];
+  eventKind: number; // world event for the round about to be played
+  eventTarget: number;
+  treasure: number[]; // 0 none, 1 armor, 2 war banner, 3 spy kit
+  banner: number[]; // War Banner ready for player 1 / player 2
 }
 
 export const resultIsSet = (game: GameAccount | null): boolean =>
@@ -450,6 +469,47 @@ export class RpsClient {
       info.data,
     ) as unknown as { choice: AnchorMove | null };
     return choiceName(decoded.choice);
+  }
+
+  /** ER: spend my espionage - copies the opponent's locked-in move into MY private account. */
+  async spy(gameId: BN, opponent: PublicKey): Promise<string> {
+    const ix = await this.program.methods
+      .spy()
+      .accountsPartial({
+        game: this.gamePda(gameId),
+        myChoice: this.choicePda(gameId, this.publicKey),
+        theirChoice: this.choicePda(gameId, opponent),
+        opponent,
+        player: this.publicKey,
+      })
+      .instruction();
+    return this.sendEr([ix]);
+  }
+
+  /** My private account: my locked move, what my spy saw, and spy charges left. */
+  async fetchMyPrivate(gameId: BN): Promise<{
+    choice: Move | null;
+    spied: Move | null;
+    spyCharges: number;
+  } | null> {
+    const conn = await this.teeConn();
+    const info = await conn.getAccountInfo(
+      this.choicePda(gameId, this.publicKey),
+    );
+    if (!info) return null;
+    const d = this.program.coder.accounts.decode(
+      "playerChoice",
+      info.data,
+    ) as unknown as {
+      choice: AnchorMove | null;
+      spied: AnchorMove | null;
+      spyCharges: number;
+    };
+    return {
+      choice: choiceName(d.choice),
+      spied: choiceName(d.spied),
+      spyCharges: d.spyCharges,
+    };
   }
 
   // ---------- reveal + settle ----------

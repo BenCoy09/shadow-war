@@ -12,7 +12,7 @@ use ephemeral_rollups_sdk::cpi::DelegateConfig;
 use ephemeral_rollups_sdk::ephem::MagicIntentBundleBuilder;
 
 // TODO: replace with YOUR program id (see steps after the first build).
-declare_id!("GXDyWeZqR9RXC93ZvN14sFsnmQDeugUsuuQNXaytBb8R");
+declare_id!("FMKTJ4ASZfDWoRXg7bdZC24Y3es3tHFSqHH28PbCSeWi");
 
 pub const PLAYER_CHOICE_SEED: &[u8] = b"player_choice";
 pub const GAME_SEED: &[u8] = b"game";
@@ -20,6 +20,16 @@ pub const VAULT_SEED: &[u8] = b"vault";
 
 pub const NUM_TERRITORIES: usize = 12;
 pub const NEUTRAL: u8 = 255;
+
+// World events (announced before each round, applied when it resolves)
+pub const EVENT_CALM: u8 = 0;
+pub const EVENT_QUAKE: u8 = 1; // one territory crumbles to neutral unless protected
+pub const EVENT_STORM: u8 = 2; // Defend does nothing this round
+
+// Hidden treasures (collected by capturing the territory)
+pub const TREASURE_ARMOR: u8 = 1; // captured territory is protected for 2 rounds
+pub const TREASURE_BANNER: u8 = 2; // your next attack breaks through any shield
+pub const TREASURE_SPYKIT: u8 = 3; // +1 espionage use
 
 #[ephemeral]
 #[program]
@@ -90,6 +100,8 @@ pub mod anchor_rock_paper_scissor {
         player_choice.game_id = game_id;
         player_choice.player = player1;
         player_choice.choice = None;
+        player_choice.spy_charges = 1;
+        player_choice.spied = None;
 
         Ok(())
     }
@@ -133,6 +145,8 @@ pub mod anchor_rock_paper_scissor {
         player_choice.game_id = game_id;
         player_choice.player = player;
         player_choice.choice = None;
+        player_choice.spy_charges = 1;
+        player_choice.spied = None;
 
         msg!("{} joined Game {} as player 2", player, game_id);
         Ok(())
@@ -156,8 +170,8 @@ pub mod anchor_rock_paper_scissor {
     // flip to public so everyone can see what was played.
     pub fn reveal_round(ctx: Context<RevealRound>) -> Result<()> {
         let game = &mut ctx.accounts.game;
-        let player1_choice = &ctx.accounts.player1_choice;
-        let player2_choice = &ctx.accounts.player2_choice;
+        let player1_choice = &mut ctx.accounts.player1_choice;
+        let player2_choice = &mut ctx.accounts.player2_choice;
         let permission_program = ctx.accounts.permission_program.to_account_info();
         let permission_game = ctx.accounts.permission_game.to_account_info();
         let permission1 = ctx.accounts.permission1.to_account_info();
@@ -175,7 +189,10 @@ pub mod anchor_rock_paper_scissor {
         let move2 = game.player2_choice.ok_or(GameError::MissingChoice)?;
 
         // Simultaneous resolution against the same starting map.
-        game.resolve(move1, move2);
+        let kits = game.resolve(move1, move2);
+        game.roll_event(move1, move2); // next round's world event
+        player1_choice.spy_charges = player1_choice.spy_charges.saturating_add(kits.0);
+        player2_choice.spy_charges = player2_choice.spy_charges.saturating_add(kits.1);
         game.round_result = RoundResult::Resolved;
         msg!(
             "Round {} resolved. Territories: {} vs {}",
@@ -275,6 +292,8 @@ pub mod anchor_rock_paper_scissor {
         game.round_result = RoundResult::None;
         player1_choice.choice = None;
         player2_choice.choice = None;
+        player1_choice.spied = None;
+        player2_choice.spied = None;
 
         let member = |pubkey: Pubkey| Member {
             flags: AUTHORITY_FLAG | TX_LOGS_FLAG,
@@ -335,6 +354,32 @@ pub mod anchor_rock_paper_scissor {
         ]])?;
 
         msg!("Game {} advanced to round {}", game.game_id, game.round);
+        Ok(())
+    }
+
+    // 🕵️ Espionage: copy the opponent's locked-in move into MY private account.
+    // Only I can read my PlayerChoice, so only I learn it.
+    pub fn spy(ctx: Context<Spy>) -> Result<()> {
+        let game = &ctx.accounts.game;
+        require!(game.round_result == RoundResult::None, GameError::RoundAlreadyRevealed);
+
+        let me = ctx.accounts.player.key();
+        let opp = ctx.accounts.opponent.key();
+        let p1 = game.player1.ok_or(GameError::MissingOpponent)?;
+        let p2 = game.player2.ok_or(GameError::MissingOpponent)?;
+        require!(
+            (me == p1 && opp == p2) || (me == p2 && opp == p1),
+            GameError::NotAPlayer
+        );
+
+        let my_choice = &mut ctx.accounts.my_choice;
+        let their_choice = &ctx.accounts.their_choice;
+        require!(my_choice.spy_charges > 0, GameError::NoSpyCharges);
+        let seen = their_choice.choice.ok_or(GameError::OpponentNotLocked)?;
+
+        my_choice.spied = Some(seen);
+        my_choice.spy_charges -= 1;
+        msg!("A spy was sent!");
         Ok(())
     }
 
@@ -657,6 +702,27 @@ pub struct NextRound<'info> {
     pub magic_program: UncheckedAccount<'info>,
 }
 
+#[derive(Accounts)]
+pub struct Spy<'info> {
+    #[account(seeds = [GAME_SEED, &game.game_id.to_le_bytes()], bump)]
+    pub game: Account<'info, Game>,
+    #[account(
+        mut,
+        seeds = [PLAYER_CHOICE_SEED, &game.game_id.to_le_bytes(), player.key().as_ref()],
+        bump
+    )]
+    pub my_choice: Account<'info, PlayerChoice>,
+    #[account(
+        seeds = [PLAYER_CHOICE_SEED, &game.game_id.to_le_bytes(), opponent.key().as_ref()],
+        bump
+    )]
+    pub their_choice: Account<'info, PlayerChoice>,
+    /// CHECK: the opponent's pubkey, validated against the game in the handler.
+    pub opponent: UncheckedAccount<'info>,
+    #[account(mut)]
+    pub player: Signer<'info>,
+}
+
 #[commit]
 #[derive(Accounts)]
 pub struct UndelegateAll<'info> {
@@ -761,6 +827,10 @@ pub struct Game {
     pub round: u8,        // current round, 1-based
     pub owner: [u8; NUM_TERRITORIES],  // 0 = player 1, 1 = player 2, 255 = neutral
     pub shield: [u8; NUM_TERRITORIES], // rounds of protection left
+    pub event_kind: u8,   // this round's world event
+    pub event_target: u8, // earthquake target territory (255 = none)
+    pub treasure: [u8; NUM_TERRITORIES], // hidden treasure type per territory (0 = none)
+    pub banner: [u8; 2],  // War Banner ready for player 1 / player 2
 }
 
 impl Game {
@@ -772,7 +842,10 @@ impl Game {
         + 1                               // paid
         + 4                               // target_wins, player1_wins, player2_wins, round
         + NUM_TERRITORIES                 // owner
-        + NUM_TERRITORIES;                // shield
+        + NUM_TERRITORIES                 // shield
+        + 2                               // event_kind, event_target
+        + NUM_TERRITORIES                 // treasure
+        + 2;                              // banner
 
     /// Fresh map: player 1 owns 0-2, player 2 owns 3-5, the rest are neutral.
     pub fn init_board(&mut self) {
@@ -782,6 +855,21 @@ impl Game {
             self.owner[t + 3] = 1;
         }
         self.shield = [0; NUM_TERRITORIES];
+        self.event_kind = EVENT_CALM;
+        self.event_target = NEUTRAL;
+        self.banner = [0; 2];
+        // Hide 3 treasures on neutral territories 6-11 (pseudo-random from the game id).
+        let mut tiles = [6usize, 7, 8, 9, 10, 11];
+        let mut s = mix(self.game_id);
+        for i in (1..6usize).rev() {
+            s = mix(s);
+            let j = (s % (i as u64 + 1)) as usize;
+            tiles.swap(i, j);
+        }
+        self.treasure = [0; NUM_TERRITORIES];
+        self.treasure[tiles[0]] = TREASURE_ARMOR;
+        self.treasure[tiles[1]] = TREASURE_BANNER;
+        self.treasure[tiles[2]] = TREASURE_SPYKIT;
         self.recount();
     }
 
@@ -800,10 +888,12 @@ impl Game {
     }
 
     /// Both moves are read first, then applied together, so order never matters.
-    pub fn resolve(&mut self, move1: Move, move2: Move) {
+    /// Returns how many Spy Kits each player collected this round.
+    pub fn resolve(&mut self, move1: Move, move2: Move) -> (u8, u8) {
         let moves = [move1, move2];
         let mut shield = self.shield;
         let mut attacked = [[false; 2]; NUM_TERRITORIES];
+        let mut attacked_any = [false; 2];
 
         for p in 0..2usize {
             let m = moves[p];
@@ -813,35 +903,107 @@ impl Game {
             }
             let mine = self.owner[t] == p as u8;
             match m.kind {
-                ActionKind::Defend if mine => shield[t] = shield[t].max(1),
+                // Storm: Defend does nothing this round.
+                ActionKind::Defend if mine && self.event_kind != EVENT_STORM => {
+                    shield[t] = shield[t].max(1)
+                }
                 ActionKind::Fortify if mine => shield[t] = shield[t].max(2),
-                ActionKind::Attack if !mine => attacked[t][p] = true,
+                ActionKind::Attack if !mine => {
+                    attacked[t][p] = true;
+                    attacked_any[p] = true;
+                }
                 _ => {} // invalid move: does nothing
             }
         }
 
+        // Earthquake: the marked territory crumbles to neutral unless protected.
         let mut new_owner = self.owner;
+        if self.event_kind == EVENT_QUAKE {
+            let q = self.event_target as usize;
+            if q < NUM_TERRITORIES && shield[q] == 0 {
+                new_owner[q] = NEUTRAL;
+            }
+        }
+
+        let mut kits = [0u8; 2];
+        let mut armor = [false; NUM_TERRITORIES];
+        let mut gained_banner = [false; 2];
+
         for t in 0..NUM_TERRITORIES {
             let a0 = attacked[t][0];
             let a1 = attacked[t][1];
             if a0 && a1 {
                 continue; // contested: nobody captures
             }
-            if shield[t] > 0 {
-                continue; // defended or fortified: attack blocked
-            }
-            if a0 {
-                new_owner[t] = 0;
+            let attacker = if a0 {
+                0usize
             } else if a1 {
-                new_owner[t] = 1;
+                1usize
+            } else {
+                continue;
+            };
+            // A War Banner breaks through any shield.
+            if shield[t] > 0 && self.banner[attacker] == 0 {
+                continue; // blocked
+            }
+            new_owner[t] = attacker as u8;
+            match self.treasure[t] {
+                TREASURE_ARMOR => armor[t] = true,
+                TREASURE_BANNER => gained_banner[attacker] = true,
+                TREASURE_SPYKIT => kits[attacker] += 1,
+                _ => {}
+            }
+            self.treasure[t] = 0;
+        }
+
+        // Attacking spends a banner; newly found banners are ready for next round.
+        for p in 0..2usize {
+            if attacked_any[p] {
+                self.banner[p] = 0;
+            }
+            if gained_banner[p] {
+                self.banner[p] = 1;
             }
         }
 
         self.owner = new_owner;
         for t in 0..NUM_TERRITORIES {
             self.shield[t] = shield[t].saturating_sub(1);
+            if armor[t] {
+                self.shield[t] = 2;
+            }
         }
         self.recount();
+        (kits[0], kits[1])
+    }
+
+    /// Pick next round's world event from this round's (until now secret) moves.
+    pub fn roll_event(&mut self, m1: Move, m2: Move) {
+        let mut s = mix(self.game_id ^ ((self.round as u64) << 56));
+        s = mix(s ^ (m1.target as u64) ^ ((m1.kind as u8 as u64) << 8));
+        s = mix(s ^ ((m2.target as u64) << 16) ^ ((m2.kind as u8 as u64) << 24));
+        self.event_target = NEUTRAL;
+        match s % 5 {
+            0 => self.event_kind = EVENT_CALM,
+            1 | 2 => {
+                // Earthquake: hits one territory somebody currently owns.
+                let mut owned = [0u8; NUM_TERRITORIES];
+                let mut n = 0usize;
+                for t in 0..NUM_TERRITORIES {
+                    if self.owner[t] != NEUTRAL {
+                        owned[n] = t as u8;
+                        n += 1;
+                    }
+                }
+                if n == 0 {
+                    self.event_kind = EVENT_CALM;
+                } else {
+                    self.event_kind = EVENT_QUAKE;
+                    self.event_target = owned[((s >> 8) % (n as u64)) as usize];
+                }
+            }
+            _ => self.event_kind = EVENT_STORM,
+        }
     }
 
     /// Over once the last round has been revealed.
@@ -875,9 +1037,11 @@ pub struct PlayerChoice {
     pub game_id: u64,
     pub player: Pubkey,
     pub choice: Option<Move>,
+    pub spy_charges: u8,     // espionage uses left (private to the owner)
+    pub spied: Option<Move>, // what my spy saw this round (private to the owner)
 }
 impl PlayerChoice {
-    pub const LEN: usize = 8 + 8 + 32 + 3;
+    pub const LEN: usize = 8 + 8 + 32 + 3 + 1 + 3;
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, PartialEq, Eq, Debug)]
@@ -925,12 +1089,26 @@ pub enum GameError {
     MustClaimFirst,
     #[msg("That territory does not exist.")]
     BadTarget,
+    #[msg("Your opponent has not locked in a move yet.")]
+    OpponentNotLocked,
+    #[msg("You have no espionage left.")]
+    NoSpyCharges,
+    #[msg("This round has already been revealed.")]
+    RoundAlreadyRevealed,
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub enum AccountType {
     Game { game_id: u64 },
     PlayerChoice { game_id: u64, player: Pubkey },
+}
+
+/// Small deterministic mixer (splitmix64) for events and treasure placement.
+fn mix(mut x: u64) -> u64 {
+    x = x.wrapping_add(0x9E37_79B9_7F4A_7C15);
+    x = (x ^ (x >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+    x = (x ^ (x >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+    x ^ (x >> 31)
 }
 
 fn pay_from_vault<'info>(

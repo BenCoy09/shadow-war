@@ -4,7 +4,7 @@ A two-player territory strategy game where **every move is secret until both pla
 
 - **Live demo:** `TODO: add your Vercel link`
 - **Demo video:** `TODO: add your video link`
-- **Program (Solana devnet):** `GXDyWeZqR9RXC93ZvN14sFsnmQDeugUsuuQNXaytBb8R`
+- **Program (Solana devnet):** `FMKTJ4ASZfDWoRXg7bdZC24Y3es3tHFSqHH28PbCSeWi`
 
 ## The game
 

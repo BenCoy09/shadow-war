@@ -9,6 +9,7 @@ import {
   winnerKey,
   matchDecided,
   initialBoard,
+  boardFrom,
   type ChoiceName,
   type GameAccount,
 } from "../lib/rps";
@@ -103,6 +104,11 @@ export function useGameMachine(mode: GameMode) {
   const [board, setBoard] = useState(initialBoard());
   const [myIndex, setMyIndex] = useState(0); // 0 = player 1, 1 = player 2
   const [report, setReport] = useState<string[]>([]);
+  const [spy, setSpy] = useState<{ charges: number; seen: ChoiceName | null }>({
+    charges: 1,
+    seen: null,
+  });
+  const [spyNote, setSpyNote] = useState<string | null>(null);
   const boardRef = useRef(board); // the board BEFORE the round being revealed
   useEffect(() => {
     boardRef.current = board;
@@ -272,18 +278,27 @@ export function useGameMachine(mode: GameMode) {
       setMyWins(meIsP1 ? game.player1Wins : game.player2Wins);
       setTheirWins(meIsP1 ? game.player2Wins : game.player1Wins);
       setRound(game.round);
-      setBoard({ owner: game.owner, shield: game.shield });
+      setBoard(boardFrom(game));
       setMyIndex(meIsP1 ? 0 : 1);
       if (me && them) {
         setReport(
           describeRound(
             boardRef.current,
-            { owner: game.owner, shield: game.shield },
+            boardFrom(game),
             me,
             them,
             meIsP1 ? 0 : 1,
           ),
         );
+      }
+      // New round: forget last round's spy report, refresh my espionage count.
+      setSpy((s) => ({ charges: s.charges, seen: null }));
+      const gid = gameIdRef.current;
+      if (gid) {
+        client
+          .fetchMyPrivate(gid)
+          .then((p) => p && setSpy({ charges: p.spyCharges, seen: null }))
+          .catch(() => undefined);
       }
       if (game.player1 && game.player2) {
         playersRef.current = { p1: game.player1, p2: game.player2 };
@@ -370,6 +385,25 @@ export function useGameMachine(mode: GameMode) {
     },
     [phase, revealLoop, step],
   );
+
+  // ----- espionage -----
+  const doSpy = useCallback(async () => {
+    const client = clientRef.current;
+    const gameId = gameIdRef.current;
+    if (!client || !gameId || !opponent) return;
+    setSpyNote(null);
+    try {
+      await step("🕵️ Spy on the opponent's move", "tee", () =>
+        client.spy(gameId, opponent),
+      );
+      const p = await client.fetchMyPrivate(gameId);
+      if (p) setSpy({ charges: p.spyCharges, seen: p.spied });
+    } catch {
+      setSpyNote(
+        "No report yet - the opponent may not have locked in. Try again in a moment.",
+      );
+    }
+  }, [opponent, step]);
 
   // ----- rematch / settle -----
   // Rematch = a brand-new match on the same PDAs (free games only, after a
@@ -512,6 +546,11 @@ export function useGameMachine(mode: GameMode) {
       await step("Make your choice readable by you alone", "tee", () =>
         player.initOwnChoicePermission(gameId),
       );
+      // Load the real starting map (treasures, event) so the first report is accurate.
+      player
+        .fetchGameAnywhere(gameId)
+        .then((g) => g && setBoard(boardFrom(g)))
+        .catch(() => undefined);
       if (token.cancelled) return;
       setPhase("pick");
 
@@ -574,6 +613,11 @@ export function useGameMachine(mode: GameMode) {
       await step("Make your choice readable by you alone", "tee", () =>
         player.initOwnChoicePermission(gameId),
       );
+      // Load the real starting map (treasures, event) so the first report is accurate.
+      player
+        .fetchGameAnywhere(gameId)
+        .then((g) => g && setBoard(boardFrom(g)))
+        .catch(() => undefined);
       if (token.cancelled) return;
 
       const url = `${window.location.origin}${window.location.pathname}?game=${gameId.toString()}&join=1`;
@@ -666,7 +710,7 @@ export function useGameMachine(mode: GameMode) {
       setMyWins(meIsP1Resume ? game.player1Wins : game.player2Wins);
       setTheirWins(meIsP1Resume ? game.player2Wins : game.player1Wins);
       setRound(game.round);
-      setBoard({ owner: game.owner, shield: game.shield });
+      setBoard(boardFrom(game));
       setMyIndex(meIsP1Resume ? 0 : 1);
       const opp = resumingHost ? game.player2 : game.player1;
       if (opp) setOpponent(opp);
@@ -753,6 +797,8 @@ export function useGameMachine(mode: GameMode) {
     setMatchOver(false);
     setBoard(initialBoard());
     setReport([]);
+    setSpy({ charges: 1, seen: null });
+    setSpyNote(null);
     setMyIndex(0);
     playersRef.current = null;
     botRef.current = null;
@@ -815,6 +861,9 @@ export function useGameMachine(mode: GameMode) {
     board,
     myIndex,
     report,
+    spy,
+    spyNote,
+    doSpy,
     pick,
     rematch,
     settle,

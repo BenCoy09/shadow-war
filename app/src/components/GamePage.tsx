@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useGameMachine, type GameMode } from "../hooks/useGameMachine";
 import Arena from "./Arena";
-import ChoicePicker from "./ChoicePicker";
+import ChoicePicker, { ACTION_LABEL, TERRITORY_NAMES } from "./ChoicePicker";
 import ShareCard from "./ShareCard";
 import ActivityLog from "./ActivityLog";
 import TopUp from "./TopUp";
@@ -200,6 +200,16 @@ export default function GamePage({ mode, onHome, onPlayAgain }: Props) {
           "done",
         ].includes(m.phase) && (
           <>
+            {["pick", "submitting", "waiting", "round-over"].includes(m.phase) &&
+              m.board.event.kind !== 0 && (
+                <div className="sw-event">
+                  {m.phase === "round-over" ? "Next round: " : "This round: "}
+                  {m.board.event.kind === 1
+                    ? `🌋 Earthquake! ${TERRITORY_NAMES[m.board.event.target] ?? "A territory"} crumbles unless protected.`
+                    : "🌪️ Storm! Defend does nothing this round (Fortify still works)."}
+                </div>
+              )}
+
             <Arena
               phase={m.phase}
               role={m.role}
@@ -242,6 +252,33 @@ export default function GamePage({ mode, onHome, onPlayAgain }: Props) {
                 board={m.board}
                 myIndex={m.myIndex}
               />
+            )}
+
+            {m.phase === "pick" && (
+              <div className="sw-spy">
+                {m.spy.seen ? (
+                  <p>
+                    🕵️ Your spy reports: they plan to{" "}
+                    <strong>{ACTION_LABEL[m.spy.seen.kind].toLowerCase()}</strong>{" "}
+                    {TERRITORY_NAMES[m.spy.seen.target]}
+                  </p>
+                ) : (
+                  <button
+                    className="btn btn-secondary"
+                    disabled={
+                      m.spy.charges < 1 ||
+                      (m.role === "solo" && !m.opponentLocked)
+                    }
+                    onClick={m.doSpy}
+                  >
+                    🕵️ Spy on opponent ({m.spy.charges} left)
+                  </button>
+                )}
+                {m.spyNote && <p className="sw-spy-note">{m.spyNote}</p>}
+                {m.board.banner[m.myIndex] === 1 && (
+                  <p>🚩 War Banner ready: your next attack breaks any shield.</p>
+                )}
+              </div>
             )}
 
             {m.phase === "waiting" && (

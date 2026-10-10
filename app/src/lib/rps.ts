@@ -124,6 +124,20 @@ const idl = {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+/** Retry a flaky network read (e.g. fetching a blockhash) a few times. */
+async function retryFetch<T>(fn: () => Promise<T>, tries = 5): Promise<T> {
+  let last: unknown;
+  for (let i = 0; i < tries; i++) {
+    try {
+      return await fn();
+    } catch (e) {
+      last = e;
+      await sleep(700 * (i + 1));
+    }
+  }
+  throw last;
+}
+
 /**
  * One client per identity (host, joiner, robot): a base-layer connection plus
  * a lazily authenticated TEE/ER connection — all ER reads/writes go through
@@ -222,6 +236,9 @@ export class RpsClient {
   private async sendBase(ixs: TransactionInstruction[]): Promise<string> {
     const tx = new Transaction().add(...ixs);
     tx.feePayer = this.publicKey;
+    tx.recentBlockhash = (
+      await retryFetch(() => this.baseConnection.getLatestBlockhash())
+    ).blockhash;
     return sendAndConfirmTransaction(this.baseConnection, tx, [this.keypair], {
       skipPreflight: true,
       commitment: "confirmed",
@@ -232,7 +249,9 @@ export class RpsClient {
     const conn = await this.teeConn();
     const tx = new Transaction().add(...ixs);
     tx.feePayer = this.publicKey;
-    tx.recentBlockhash = (await conn.getLatestBlockhash()).blockhash;
+    tx.recentBlockhash = (
+      await retryFetch(() => conn.getLatestBlockhash())
+    ).blockhash;
     return sendAndConfirmTransaction(conn, tx, [this.keypair], {
       skipPreflight: true,
       commitment: "confirmed",

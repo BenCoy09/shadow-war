@@ -69,8 +69,8 @@ export type Role = "solo" | "host" | "joiner";
 
 import { describeRound } from "../lib/report";
 
-const REVEAL_ANIM_MS = 2800;
-const ROUND_INTERLUDE_MS = 2200; // pause on the score between rounds
+const REVEAL_ANIM_MS = 2000;
+const ROUND_INTERLUDE_MS = 1500; // pause on the score between rounds
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 interface Cancelled {

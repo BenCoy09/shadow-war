@@ -68,7 +68,7 @@ export const TOPUP_NETWORK_LABEL = /mainnet/i.test(TOPUP_ENDPOINT)
       ? "local cluster"
       : "devnet";
 
-export const POLL_INTERVAL_MS = 2500;
+export const POLL_INTERVAL_MS = 1500;
 
 export const isDevnet = BASE_ENDPOINT.includes("devnet");
 export const baseExplorerTxUrl = (sig: string) =>

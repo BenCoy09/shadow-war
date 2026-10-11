@@ -31,7 +31,7 @@ export default function Home({ onStart }: Props) {
           <span className="hand wiggle d1">✋</span>
           <span className="hand wiggle d2">✌️</span>
         </div>
-        <h1 className="title">Rock · Paper · Scissors</h1>
+        <h1 className="title">Shadow War</h1>
         <p className="subtitle">
           Confidential PvP on Solana — moves stay{" "}
           <strong>encrypted in a TEE</strong> until both players throw.

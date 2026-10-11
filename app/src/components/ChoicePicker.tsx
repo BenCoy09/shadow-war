@@ -1,15 +1,16 @@
 import type { ActionKind, ChoiceName } from "../lib/rps";
-
-export const ACTION_EMOJI: Record<ActionKind, string> = {
-  attack: "⚔️",
-  defend: "🛡️",
-  fortify: "🏰",
-};
+import { ACTION_ICON, IconSeal } from "./Icons";
 
 export const ACTION_LABEL: Record<ActionKind, string> = {
   attack: "Attack",
   defend: "Defend",
   fortify: "Fortify",
+};
+
+export const ACTION_HELP: Record<ActionKind, string> = {
+  attack: "Capture it",
+  defend: "Hold this round",
+  fortify: "Hold two rounds",
 };
 
 export const TERRITORY_NAMES = [
@@ -52,10 +53,10 @@ export default function ChoicePicker({
     <div className="picker">
       <p className="picker-hint">
         {disabled
-          ? "Locking in…"
+          ? "Sealing your order…"
           : !hasTarget
-            ? "Tap a territory on the map, then choose your secret move 🤫"
-            : `${TERRITORY_NAMES[target as number]} selected — choose your move`}
+            ? "Pick a territory on the map, then seal your order."
+            : `${TERRITORY_NAMES[target as number]}: choose an order`}
       </p>
       <div className="picker-row">
         {kinds.map((kind) => {
@@ -63,15 +64,23 @@ export default function ChoicePicker({
           const valid = hasTarget && (kind === "attack" ? !owned : owned);
           const isSelected =
             !!selected && selected.kind === kind && selected.target === target;
+          const Icon = ACTION_ICON[kind];
           return (
             <button
               key={kind}
               className={`choice-btn ${isSelected ? "selected" : ""}`}
               onClick={() => onPick({ kind, target: target as number })}
               disabled={disabled || !valid}
+              aria-pressed={isSelected}
             >
-              <span className="choice-emoji">{ACTION_EMOJI[kind]}</span>
+              {isSelected && (
+                <span className="choice-seal">
+                  <IconSeal size={22} />
+                </span>
+              )}
+              <Icon size={28} />
               <span className="choice-label">{ACTION_LABEL[kind]}</span>
+              <span className="choice-help">{ACTION_HELP[kind]}</span>
             </button>
           );
         })}

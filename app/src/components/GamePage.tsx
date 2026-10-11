@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useGameMachine, type GameMode } from "../hooks/useGameMachine";
 import Arena from "./Arena";
+import { IconEye } from "./Icons";
 import ChoicePicker, { ACTION_LABEL, TERRITORY_NAMES } from "./ChoicePicker";
 import ShareCard from "./ShareCard";
 import ActivityLog from "./ActivityLog";
@@ -43,7 +44,7 @@ export default function GamePage({ mode, onHome, onPlayAgain }: Props) {
         className="confetto"
         style={{
           left: `${Math.random() * 100}%`,
-          background: `hsl(${Math.floor(Math.random() * 360)}, 90%, 60%)`,
+          background: ["#d9a54c", "#e7ebe6", "#d0603f", "#6cc4a1"][i % 4],
           animationDelay: `${Math.random() * 1.2}s`,
           animationDuration: `${2.2 + Math.random() * 1.8}s`,
           transform: `rotate(${Math.random() * 360}deg)`,
@@ -64,12 +65,12 @@ export default function GamePage({ mode, onHome, onPlayAgain }: Props) {
   };
 
   const requestDrop = async () => {
-    setAirdropMsg("Requesting airdrop…");
+    setAirdropMsg("Requesting devnet SOL…");
     try {
       await m.airdrop();
-      setAirdropMsg("Airdrop landed 🪂");
+      setAirdropMsg("Devnet SOL received.");
     } catch {
-      setAirdropMsg("Faucet refused — try faucet.solana.com instead.");
+      setAirdropMsg("Faucet refused. Try faucet.solana.com instead.");
     }
   };
 
@@ -91,7 +92,7 @@ export default function GamePage({ mode, onHome, onPlayAgain }: Props) {
               onClick={copyAddress}
               title={m.myAddress}
             >
-              🔑 {shortKey(m.myAddress)}
+              {shortKey(m.myAddress)}
               {m.balance !== null && (
                 <span className="wallet-balance">
                   {m.balance.toFixed(3)} SOL
@@ -102,7 +103,7 @@ export default function GamePage({ mode, onHome, onPlayAgain }: Props) {
               className="btn btn-ghost withdraw-link"
               onClick={() => setShowWithdraw(true)}
             >
-              Withdraw 🏧
+              Withdraw
             </button>
           </div>
         )}
@@ -110,19 +111,19 @@ export default function GamePage({ mode, onHome, onPlayAgain }: Props) {
 
       {staked && m.gameIdStr && (
         <div className="pot-banner">
-          💰 Wager <strong>{m.stakeSol} SOL</strong> each · Pot{" "}
-          <strong>{m.potSol.toFixed(3)} SOL</strong> · winner takes all
+          Wager <strong>{m.stakeSol} SOL</strong> each. Pot{" "}
+          <strong>{m.potSol.toFixed(3)} SOL</strong>, winner takes all.
         </div>
       )}
 
       {isMatch && m.gameIdStr && (
         <div className="score-banner">
-          <span className="score-label">{bestOf} rounds · land held</span>
-          <span className="score-nums">
-            You <strong>{m.myWins}</strong> — <strong>{m.theirWins}</strong>{" "}
-            {m.role === "solo" ? "Robot" : "Opp"}
+          <span className="score-round">
+            {m.matchOver
+              ? "Final round played"
+              : `Round ${Math.min(m.round, bestOf)} of ${bestOf}`}
           </span>
-          {!m.matchOver && <span className="score-round">Round {m.round}</span>}
+          <span className="score-label">Most territories wins</span>
         </div>
       )}
 
@@ -137,16 +138,16 @@ export default function GamePage({ mode, onHome, onPlayAgain }: Props) {
       <main className="game-main">
         {m.phase === "loading" && (
           <div className="center-state">
-            <div className="big-spinner">✊</div>
-            <p>Warming up the rollup…</p>
+            <div className="big-spinner" role="status" aria-label="Loading" />
+            <p>Connecting to the rollup…</p>
           </div>
         )}
 
         {m.phase === "needs-funds" && (
           <div className="card fund-card">
-            <h3>Fuel up your burner wallet ⛽</h3>
+            <h3>Fund your game wallet</h3>
             <p>
-              You play from a throwaway wallet in your browser — it needs a
+              You play from a temporary wallet in this browser. It needs a
               little devnet SOL.
             </p>
             <code
@@ -161,7 +162,7 @@ export default function GamePage({ mode, onHome, onPlayAgain }: Props) {
                 Balance: {(m.balance ?? 0).toFixed(4)} SOL
               </span>
               <button className="btn btn-secondary" onClick={requestDrop}>
-                Request airdrop 🪂
+                Request devnet SOL
               </button>
             </div>
             {airdropMsg && <p className="fund-msg">{airdropMsg}</p>}
@@ -177,7 +178,7 @@ export default function GamePage({ mode, onHome, onPlayAgain }: Props) {
 
         {m.phase === "error" && (
           <div className="card error-card">
-            <h3>Whoops 💥</h3>
+            <h3>Something went wrong</h3>
             <p>{m.error}</p>
             <div className="btn-row">
               <button className="btn btn-primary" onClick={onPlayAgain}>
@@ -203,10 +204,14 @@ export default function GamePage({ mode, onHome, onPlayAgain }: Props) {
             {["pick", "submitting", "waiting", "round-over"].includes(m.phase) &&
               m.board.event.kind !== 0 && (
                 <div className="sw-event">
-                  {m.phase === "round-over" ? "Next round: " : "This round: "}
-                  {m.board.event.kind === 1
-                    ? `🌋 Earthquake! ${TERRITORY_NAMES[m.board.event.target] ?? "A territory"} crumbles unless protected.`
-                    : "🌪️ Storm! Defend does nothing this round (Fortify still works)."}
+                  <strong>
+                    {m.phase === "round-over" ? "Next round" : "This round"}
+                  </strong>
+                  <span>
+                    {m.board.event.kind === 1
+                      ? `Earthquake. ${TERRITORY_NAMES[m.board.event.target] ?? "A territory"} crumbles unless protected.`
+                      : "Storm. Defend does nothing. Fortify still holds."}
+                  </span>
                 </div>
               )}
 
@@ -228,7 +233,7 @@ export default function GamePage({ mode, onHome, onPlayAgain }: Props) {
                 m.phase,
               ) && (
                 <div className="sw-report">
-                  <strong>📜 Battle report</strong>
+                  <strong>Battle report</strong>
                   <ul>
                     {m.report.map((line, i) => (
                       <li key={i}>{line}</li>
@@ -258,7 +263,7 @@ export default function GamePage({ mode, onHome, onPlayAgain }: Props) {
               <div className="sw-spy">
                 {m.spy.seen ? (
                   <p>
-                    🕵️ Your spy reports: they plan to{" "}
+                    Your spy reports: they plan to{" "}
                     <strong>{ACTION_LABEL[m.spy.seen.kind].toLowerCase()}</strong>{" "}
                     {TERRITORY_NAMES[m.spy.seen.target]}
                   </p>
@@ -271,12 +276,12 @@ export default function GamePage({ mode, onHome, onPlayAgain }: Props) {
                     }
                     onClick={m.doSpy}
                   >
-                    🕵️ Spy on opponent ({m.spy.charges} left)
+                    <IconEye size={18} /> Spy on their order ({m.spy.charges} left)
                   </button>
                 )}
                 {m.spyNote && <p className="sw-spy-note">{m.spyNote}</p>}
                 {m.board.banner[m.myIndex] === 1 && (
-                  <p>🚩 War Banner ready: your next attack breaks any shield.</p>
+                  <p>War Banner ready: your next attack breaks any shield.</p>
                 )}
               </div>
             )}
@@ -284,9 +289,9 @@ export default function GamePage({ mode, onHome, onPlayAgain }: Props) {
             {m.phase === "waiting" && (
               <p className="status-line pulse">
                 {m.role === "solo"
-                  ? "Choices are in — revealing…"
+                  ? "Orders are in. Opening them…"
                   : m.opponent
-                    ? "Waiting for the opponent's move ⚡"
+                    ? "Waiting for the other side's order"
                     : "Waiting for a challenger…"}
               </p>
             )}
@@ -311,7 +316,7 @@ export default function GamePage({ mode, onHome, onPlayAgain }: Props) {
                           on the line, each game settles decisively. */}
                       {!staked && (
                         <button className="btn btn-primary" onClick={m.rematch}>
-                          Rematch ⚡
+                          Rematch
                         </button>
                       )}
                       <button
@@ -319,13 +324,13 @@ export default function GamePage({ mode, onHome, onPlayAgain }: Props) {
                         onClick={m.settle}
                       >
                         {staked
-                          ? "Settle & claim pot 💰"
-                          : "Settle to Solana 🏁"}
+                          ? "Settle and claim the pot"
+                          : "Settle to Solana"}
                       </button>
                     </>
                   ) : (
                     <button className="btn btn-primary" onClick={onPlayAgain}>
-                      New game 🔄
+                      New game
                     </button>
                   )}
                   <button className="btn btn-ghost" onClick={onHome}>
@@ -336,14 +341,14 @@ export default function GamePage({ mode, onHome, onPlayAgain }: Props) {
                   {m.settled
                     ? staked
                       ? m.result?.outcome === "win"
-                        ? "You won the pot! Withdraw it to your wallet 🏧"
+                        ? "You won the pot. Withdraw it to your wallet."
                         : m.result?.outcome === "tie"
-                          ? "Tie — stakes refunded, settled on Solana ✓"
-                          : "Settled on Solana ✓"
-                      : "Result is settled on Solana ✓"
+                          ? "Tie. Stakes refunded and settled on Solana."
+                          : "Settled on Solana."
+                      : "The result is settled on Solana."
                     : staked
-                      ? "Settle to pay out the pot to the winner 💰"
-                      : "Rematch reuses the same accounts — no new rent ⚡"}
+                      ? "Settle to pay out the pot to the winner."
+                      : "Rematch reuses the same accounts, so there is no new rent."}
                 </p>
               </>
             )}

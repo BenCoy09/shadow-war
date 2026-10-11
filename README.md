@@ -2,8 +2,8 @@
 
 A two-player territory strategy game where **every move is secret until both players have locked in**, then all moves resolve at the same instant. Built for **MagicBlock Solana Blitz v9**.
 
-- **Live demo:** `TODO: add your Vercel link`
-- **Demo video:** `TODO: add your video link`
+- **Live demo:** https://shadow-war-eight.vercel.app
+- **Demo video:** https://youtu.be/WjOx9reoTK8
 - **Program (Solana devnet):** `FMKTJ4ASZfDWoRXg7bdZC24Y3es3tHFSqHH28PbCSeWi`
 
 ## The game
@@ -19,6 +19,14 @@ A two-player territory strategy game where **every move is secret until both pla
 If both players attack the same territory, **nobody captures it**. After round 5, whoever holds the most territories wins. A tie is a shared victory.
 
 The tension: if you attack, you leave your own land undefended. Do you guess your opponent will attack, or play it safe?
+
+## Beyond the basics
+
+- **🕵️ Espionage:** each player gets one charge per game. The `spy` instruction copies the opponent's locked-in move into the spy's own private account, readable only by them, before the round resolves.
+- **🌋 World events:** each round ends by picking an event for the next one. An **Earthquake** crumbles a named territory to neutral unless it is shielded, and a **Storm** makes Defend do nothing that round.
+- **💎 Hidden treasures:** three treasures are hidden on neutral land: **Armor** (a 2-round shield on capture), a **War Banner** (your next attack breaks any shield) and a **Spy Kit** (one extra espionage charge).
+
+Note on randomness: events and treasure placement use a deterministic on-chain hash (seeded from game id, round, both moves and slot), **not** MagicBlock VRF. Switching to VRF is on the roadmap.
 
 ## How MagicBlock is used
 

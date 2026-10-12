@@ -3,7 +3,7 @@
 A two-player territory strategy game where **every move is secret until both players have locked in**, then all moves resolve at the same instant. Built for **MagicBlock Solana Blitz v9**.
 
 - **Live demo:** https://shadow-war-eight.vercel.app
-- **Demo video:** https://youtu.be/WjOx9reoTK8
+- **Demo video:** https://youtu.be/5b7OzSwQtM
 - **Program (Solana devnet):** `FMKTJ4ASZfDWoRXg7bdZC24Y3es3tHFSqHH28PbCSeWi`
 
 ## The game
